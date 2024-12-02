@@ -118,8 +118,19 @@ class ChessBoard:
                                     return False
         return True
 
+    def _is_path_clear(self, start_row, start_col, end_row, end_col):
+        # Check if the path between start and end is clear
+        row_step = 0 if start_row == end_row else (1 if end_row > start_row else -1)
+        col_step = 0 if start_col == end_col else (1 if end_col > start_col else -1)
+        current_row, current_col = start_row + row_step, start_col + col_step
+        while (current_row, current_col) != (end_row, end_col):
+            if self.board[current_row][current_col] is not None:
+                return False
+            current_row += row_step
+            current_col += col_step
+        return True
+
     def is_valid_move(self, start_row, start_col, end_row, end_col):
-        # Very basic move validation
         piece = self.board[start_row][start_col]
         destination = self.board[end_row][end_col]
 
@@ -127,8 +138,25 @@ class ChessBoard:
         if destination and destination.color == piece.color:
             return False
 
-        # Basic piece-specific movement logic
-        if piece.type == 'pawn':
+        # Path blocking and basic piece-specific movement logic
+        if piece.type == 'rook':
+            # Rook moves in straight lines and path must be clear
+            if start_row == end_row or start_col == end_col:
+                return self._is_path_clear(start_row, start_col, end_row, end_col)
+
+        elif piece.type == 'bishop':
+            # Bishop moves diagonally and path must be clear
+            if abs(start_row - end_row) == abs(start_col - end_col):
+                return self._is_path_clear(start_row, start_col, end_row, end_col)
+
+        elif piece.type == 'queen':
+            # Queen moves in straight lines or diagonally and path must be clear
+            if (start_row == end_row or 
+                start_col == end_col or 
+                abs(start_row - end_row) == abs(start_col - end_col)):
+                return self._is_path_clear(start_row, start_col, end_row, end_col)
+
+        elif piece.type == 'pawn':
             # White pawns move up, black pawns move down
             direction = 1 if piece.color == 'white' else -1
             
@@ -144,25 +172,11 @@ class ChessBoard:
             if abs(start_col - end_col) == 1 and start_row + direction == end_row and destination:
                 return True
 
-        elif piece.type == 'rook':
-            # Rook moves in straight lines
-            return start_row == end_row or start_col == end_col
-
         elif piece.type == 'knight':
             # Knight moves in L-shape
             row_diff = abs(start_row - end_row)
             col_diff = abs(start_col - end_col)
             return (row_diff == 2 and col_diff == 1) or (row_diff == 1 and col_diff == 2)
-
-        elif piece.type == 'bishop':
-            # Bishop moves diagonally
-            return abs(start_row - end_row) == abs(start_col - end_col)
-
-        elif piece.type == 'queen':
-            # Queen can move in any straight line or diagonal
-            return (start_row == end_row or 
-                    start_col == end_col or 
-                    abs(start_row - end_row) == abs(start_col - end_col))
 
         elif piece.type == 'king':
             # King can move one square in any direction
