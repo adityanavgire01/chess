@@ -11,6 +11,7 @@ class ChessBoard:
     def __init__(self):
         self.board = [[None for _ in range(8)] for _ in range(8)]
         self._initialize_board()
+        self.current_player = 'white'
 
     def _initialize_board(self):
         # Set up pawns
@@ -63,6 +64,112 @@ class ChessBoard:
         }
         return symbols[piece.color][piece.type]
 
+    def _find_king_position(self, color):
+        for row in range(8):
+            for col in range(8):
+                piece = self.board[row][col]
+                if piece and piece.type == 'king' and piece.color == color:
+                    return row, col
+        return None
+
+    def is_in_check(self, color):
+        king_pos = self._find_king_position(color)
+        if not king_pos:
+            return False
+
+        opponent_color = 'black' if color == 'white' else 'white'
+        
+        for row in range(8):
+            for col in range(8):
+                piece = self.board[row][col]
+                if piece and piece.color == opponent_color:
+                    # Check if this piece can attack the king
+                    if self.is_valid_move(row, col, king_pos[0], king_pos[1]):
+                        return True
+        return False
+
+    def is_checkmate(self, color):
+        # If not in check, it's not a checkmate
+        if not self.is_in_check(color):
+            return False
+
+        # Try all possible moves to see if any move gets out of check
+        for row in range(8):
+            for col in range(8):
+                piece = self.board[row][col]
+                if piece and piece.color == color:
+                    for new_row in range(8):
+                        for new_col in range(8):
+                            if self.is_valid_move(row, col, new_row, new_col):
+                                # Simulate the move
+                                original_piece = self.board[new_row][new_col]
+                                temp_piece = self.board[row][col]
+                                self.board[new_row][new_col] = temp_piece
+                                self.board[row][col] = None
+
+                                # Check if this move resolves the check
+                                still_in_check = self.is_in_check(color)
+
+                                # Undo the move
+                                self.board[row][col] = temp_piece
+                                self.board[new_row][new_col] = original_piece
+
+                                if not still_in_check:
+                                    return False
+        return True
+
+    def is_valid_move(self, start_row, start_col, end_row, end_col):
+        # Very basic move validation
+        piece = self.board[start_row][start_col]
+        destination = self.board[end_row][end_col]
+
+        # Can't move to a square with a piece of the same color
+        if destination and destination.color == piece.color:
+            return False
+
+        # Basic piece-specific movement logic
+        if piece.type == 'pawn':
+            # White pawns move up, black pawns move down
+            direction = 1 if piece.color == 'white' else -1
+            
+            # Standard one-square move
+            if start_col == end_col and start_row + direction == end_row and not destination:
+                return True
+            
+            # Initial two-square move
+            if not piece.has_moved and start_col == end_col and start_row + 2*direction == end_row and not destination:
+                return True
+            
+            # Diagonal capture
+            if abs(start_col - end_col) == 1 and start_row + direction == end_row and destination:
+                return True
+
+        elif piece.type == 'rook':
+            # Rook moves in straight lines
+            return start_row == end_row or start_col == end_col
+
+        elif piece.type == 'knight':
+            # Knight moves in L-shape
+            row_diff = abs(start_row - end_row)
+            col_diff = abs(start_col - end_col)
+            return (row_diff == 2 and col_diff == 1) or (row_diff == 1 and col_diff == 2)
+
+        elif piece.type == 'bishop':
+            # Bishop moves diagonally
+            return abs(start_row - end_row) == abs(start_col - end_col)
+
+        elif piece.type == 'queen':
+            # Queen can move in any straight line or diagonal
+            return (start_row == end_row or 
+                    start_col == end_col or 
+                    abs(start_row - end_row) == abs(start_col - end_col))
+
+        elif piece.type == 'king':
+            # King can move one square in any direction
+            return abs(start_row - end_row) <= 1 and abs(start_col - end_col) <= 1
+
+        return False
+
     def move_piece(self, start, end):
         # Convert algebraic notation to array indices
         start_col = ord(start[0].lower()) - ord('a')
@@ -70,29 +177,58 @@ class ChessBoard:
         end_col = ord(end[0].lower()) - ord('a')
         end_row = int(end[1]) - 1
 
-        # Validate move (very basic for now)
+        # Validate move (considering check and current player)
         piece = self.board[start_row][start_col]
-        if piece:
-            self.board[end_row][end_col] = piece
-            self.board[start_row][start_col] = None
-            return True
-        return False
+        if not piece or piece.color != self.current_player:
+            print("Invalid move: Not your piece or not your turn.")
+            return False
+
+        if not self.is_valid_move(start_row, start_col, end_row, end_col):
+            print("Invalid move for this piece.")
+            return False
+
+        # Simulate move to check if it resolves or causes check
+        original_piece = self.board[end_row][end_col]
+        self.board[end_row][end_col] = piece
+        self.board[start_row][start_col] = None
+
+        # Mark piece as moved
+        piece.has_moved = True
+
+        # Check if move puts own king in check
+        if self.is_in_check(self.current_player):
+            # Undo move
+            self.board[start_row][start_col] = piece
+            self.board[end_row][end_col] = original_piece
+            print("Invalid move: Cannot move into check.")
+            return False
+
+        # Check for checkmate
+        opponent_color = 'black' if self.current_player == 'white' else 'white'
+        if self.is_checkmate(opponent_color):
+            print(f"CHECKMATE! {self.current_player.capitalize()} wins!")
+            return "CHECKMATE"
+
+        # Switch players
+        self.current_player = opponent_color
+        return True
 
 def play_chess():
     board = ChessBoard()
-    current_player = 'white'
 
     while True:
         board.display_board()
-        print(f"{current_player.capitalize()}'s turn")
+        print(f"{board.current_player.capitalize()}'s turn")
         
         start = input("Enter the piece to move (e.g., 'e2'): ")
         end = input("Enter the destination (e.g., 'e4'): ")
 
-        if board.move_piece(start, end):
-            # Switch players
-            current_player = 'black' if current_player == 'white' else 'white'
-        else:
+        result = board.move_piece(start, end)
+        
+        if result == "CHECKMATE":
+            board.display_board()
+            break
+        elif not result:
             print("Invalid move. Try again.")
 
 if __name__ == "__main__":
